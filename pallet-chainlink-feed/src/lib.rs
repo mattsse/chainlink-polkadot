@@ -5,6 +5,8 @@
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 #[cfg(test)]
+mod mock;
+#[cfg(test)]
 mod tests;
 
 pub mod default_weights;
@@ -18,6 +20,7 @@ use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchError, DispatchResult, DispatchResultWithPostInfo, HasCompact},
 	ensure,
+	pallet_prelude::*,
 	weights::Weight,
 	Parameter, RuntimeDebug,
 };
@@ -32,12 +35,12 @@ use sp_std::convert::{TryFrom, TryInto};
 use utils::{median, with_transaction_result};
 
 pub type BalanceOf<T> =
-	<<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 pub type RoundId = u32;
 
-pub trait Trait: frame_system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+pub trait Config: frame_system::Config {
+	type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 
 	/// Type for feed indexing.
 	type FeedId: Member + Parameter + Default + Copy + HasCompact + BaseArithmetic;
@@ -93,10 +96,10 @@ pub struct FeedConfig<
 	oracle_count: u32,
 }
 pub type FeedConfigOf<T> = FeedConfig<
-	<T as frame_system::Trait>::AccountId,
+	<T as frame_system::Config>::AccountId,
 	BalanceOf<T>,
-	<T as frame_system::Trait>::BlockNumber,
-	<T as Trait>::Value,
+	<T as frame_system::Config>::BlockNumber,
+	<T as Config>::Value,
 >;
 
 /// Round data relevant to consumers.
@@ -109,7 +112,7 @@ pub struct Round<BlockNumber, Value> {
 	updated_at: Option<BlockNumber>,
 	answered_in_round: Option<RoundId>,
 }
-pub type RoundOf<T> = Round<<T as frame_system::Trait>::BlockNumber, <T as Trait>::Value>;
+pub type RoundOf<T> = Round<<T as frame_system::Config>::BlockNumber, <T as Config>::Value>;
 
 impl<BlockNumber, Value> Round<BlockNumber, Value>
 where
@@ -134,7 +137,7 @@ pub struct RoundDetails<Balance, BlockNumber, Value> {
 	timeout: BlockNumber,
 }
 pub type RoundDetailsOf<T> =
-	RoundDetails<BalanceOf<T>, <T as frame_system::Trait>::BlockNumber, <T as Trait>::Value>;
+	RoundDetails<BalanceOf<T>, <T as frame_system::Config>::BlockNumber, <T as Config>::Value>;
 
 /// Meta data tracking withdrawable rewards and admin for an oracle.
 #[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
@@ -143,7 +146,7 @@ pub struct OracleMeta<AccountId, Balance> {
 	admin: AccountId,
 	pending_admin: Option<AccountId>,
 }
-pub type OracleMetaOf<T> = OracleMeta<<T as frame_system::Trait>::AccountId, BalanceOf<T>>;
+pub type OracleMetaOf<T> = OracleMeta<<T as frame_system::Config>::AccountId, BalanceOf<T>>;
 
 /// Meta data tracking the oracle status for a feed.
 #[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
@@ -154,7 +157,7 @@ pub struct OracleStatus<Value> {
 	last_started_round: Option<RoundId>,
 	latest_submission: Option<Value>,
 }
-pub type OracleStatusOf<T> = OracleStatus<<T as Trait>::Value>;
+pub type OracleStatusOf<T> = OracleStatus<<T as Config>::Value>;
 
 impl<Value> OracleStatus<Value>
 where
@@ -184,7 +187,7 @@ pub struct RoundData<BlockNumber, Value> {
 	pub updated_at: BlockNumber,
 	pub answered_in_round: RoundId,
 }
-pub type RoundDataOf<T> = RoundData<<T as frame_system::Trait>::BlockNumber, <T as Trait>::Value>;
+pub type RoundDataOf<T> = RoundData<<T as frame_system::Config>::BlockNumber, <T as Config>::Value>;
 
 /// Possible error when converting from `Round` to `RoundData`.
 #[derive(Clone, Encode, Decode, Eq, PartialEq, RuntimeDebug)]
@@ -210,7 +213,7 @@ impl<B, V> TryFrom<Round<B, V>> for RoundData<B, V> {
 }
 
 /// Trait for interacting with the feeds in the pallet.
-pub trait FeedOracle<T: frame_system::Trait> {
+pub trait FeedOracle<T: frame_system::Config> {
 	type FeedId: Parameter + BaseArithmetic;
 	type Feed: FeedInterface<T>;
 	type MutableFeed: MutableFeedInterface<T>;
@@ -227,7 +230,7 @@ pub trait FeedOracle<T: frame_system::Trait> {
 }
 
 /// Trait for read-only access to a feed.
-pub trait FeedInterface<T: frame_system::Trait> {
+pub trait FeedInterface<T: frame_system::Config> {
 	type Value: Parameter + BaseArithmetic;
 
 	/// Returns the id of the first round that contains non-default data.
@@ -252,7 +255,7 @@ pub trait FeedInterface<T: frame_system::Trait> {
 }
 
 /// Trait for read-write access to a feed.
-pub trait MutableFeedInterface<T: frame_system::Trait>: FeedInterface<T> {
+pub trait MutableFeedInterface<T: frame_system::Config>: FeedInterface<T> {
 	/// Request that a new oracle round be started.
 	///
 	/// **Warning:** Fallible function that changes storage.
@@ -260,7 +263,7 @@ pub trait MutableFeedInterface<T: frame_system::Trait>: FeedInterface<T> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as ChainlinkFeed {
+	trait Store for Module<T: Config> as ChainlinkFeed {
 		/// The account controlling the funds for this pallet.
 		pub PalletAdmin get(fn pallet_admin) config(): T::AccountId;
 		// possible optimization: put together with admin?
@@ -283,12 +286,12 @@ decl_storage! {
 		/// User-facing round data.
 		pub Rounds get(fn round):
 			double_map hasher(twox_64_concat) T::FeedId,
-			           hasher(twox_64_concat) RoundId => Option<RoundOf<T>>;
+					   hasher(twox_64_concat) RoundId => Option<RoundOf<T>>;
 
 		/// Operator-facing round data.
 		pub Details get(fn round_details):
 			double_map hasher(twox_64_concat) T::FeedId,
-			           hasher(twox_64_concat) RoundId => Option<RoundDetailsOf<T>>;
+					   hasher(twox_64_concat) RoundId => Option<RoundDetailsOf<T>>;
 
 		/// Global oracle meta data including admin and withdrawable funds.
 		pub Oracles get(fn oracle):
@@ -297,12 +300,12 @@ decl_storage! {
 		/// Feed local oracle status data.
 		pub OracleStatuses get(fn oracle_status):
 			double_map hasher(twox_64_concat) T::FeedId,
-			           hasher(blake2_128_concat) T::AccountId => Option<OracleStatusOf<T>>;
+					   hasher(blake2_128_concat) T::AccountId => Option<OracleStatusOf<T>>;
 
 		/// Per-feed permissioning for starting new rounds.
 		pub Requesters get(fn requester):
 			double_map hasher(twox_64_concat) T::FeedId,
-			           hasher(blake2_128_concat) T::AccountId => Option<Requester>;
+					   hasher(blake2_128_concat) T::AccountId => Option<Requester>;
 
 	} add_extra_genesis {
 		// accounts configured at genesis to be allowed to create new feeds
@@ -321,11 +324,11 @@ pub type SubmissionBounds = (u32, u32);
 decl_event!(
 	pub enum Event<T>
 	where
-		AccountId = <T as frame_system::Trait>::AccountId,
+		AccountId = <T as frame_system::Config>::AccountId,
 		Balance = BalanceOf<T>,
-		BlockNumber = <T as frame_system::Trait>::BlockNumber,
-		FeedId = <T as Trait>::FeedId,
-		Value = <T as Trait>::Value,
+		BlockNumber = <T as frame_system::Config>::BlockNumber,
+		FeedId = <T as Config>::FeedId,
+		Value = <T as Config>::Value,
 	{
 		/// A new oracle feed was created. \[feed_id, creator\]
 		FeedCreated(FeedId, AccountId),
@@ -361,7 +364,7 @@ decl_event!(
 );
 
 decl_error! {
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 		/// A math operation lead to an overflow.
 		Overflow,
 		/// Given account id is not an oracle
@@ -445,7 +448,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 
 		/// The account used to pay oracles and manage the funds of this pallet.
@@ -495,7 +498,7 @@ decl_module! {
 					oracle_count: Zero::zero(),
 				};
 				let mut feed = Feed::<T>::new(id, new_config); // synced on drop
-				let started_at = frame_system::Module::<T>::block_number();
+				let started_at = frame_system::Pallet::<T>::block_number();
 				let updated_at = Some(started_at);
 				// Store a dummy value for round 0 because we will not get useful data for
 				// it, but need some seed data that future rounds can carry over.
@@ -621,7 +624,7 @@ decl_module! {
 					let new_answer = median(&mut details.submissions);
 					let mut round = Self::round(feed_id, round_id).ok_or(Error::<T>::RoundNotFound)?;
 					round.answer = Some(new_answer);
-					let updated_at = frame_system::Module::<T>::block_number();
+					let updated_at = frame_system::Pallet::<T>::block_number();
 					round.updated_at = Some(updated_at);
 					round.answered_in_round = Some(round_id);
 					Rounds::<T>::insert(feed_id, round_id, round);
@@ -990,13 +993,13 @@ decl_module! {
 /// Proxy used for interaction with a feed.
 /// `should_sync` flag determines whether the `config` is put into
 /// storage on `drop`.
-pub struct Feed<T: Trait> {
+pub struct Feed<T: Config> {
 	id: T::FeedId,
 	config: FeedConfigOf<T>,
 	should_sync: bool,
 }
 
-impl<T: Trait> Feed<T> {
+impl<T: Config> Feed<T> {
 	// --- constructors ---
 
 	/// Create a new feed with the given id and config.
@@ -1110,13 +1113,11 @@ impl<T: Trait> Feed<T> {
 			.details(round)
 			.map(|d| d.timeout)
 			.unwrap_or(Zero::zero());
-		let block_num = frame_system::Module::<T>::block_number();
+		let block_num = frame_system::Pallet::<T>::block_number();
 
 		started_at > Zero::zero()
 			&& timeout > Zero::zero()
-			&& started_at
-				.saturating_add(timeout)
-				< block_num
+			&& started_at.saturating_add(timeout) < block_num
 	}
 
 	/// Check whether a round has been updated.
@@ -1157,11 +1158,14 @@ impl<T: Trait> Feed<T> {
 				ensure!(meta.admin == admin, Error::<T>::OwnerCannotChangeAdmin);
 			} else {
 				// Initialize the oracle if it is not tracked, yet.
-				Oracles::<T>::insert(&oracle, OracleMeta {
-					withdrawable: Zero::zero(),
-					admin,
-					..Default::default()
-				});
+				Oracles::<T>::insert(
+					&oracle,
+					OracleMeta {
+						withdrawable: Zero::zero(),
+						admin,
+						..Default::default()
+					},
+				);
 			}
 			OracleStatuses::<T>::try_mutate(self.id, &oracle, |maybe_status| -> DispatchResult {
 				// Only allow enabling non-existent or disabled oracles
@@ -1193,7 +1197,9 @@ impl<T: Trait> Feed<T> {
 	/// **Warning:** Fallible function that changes storage.
 	fn disable_oracles(&mut self, to_disable: Vec<T::AccountId>) -> DispatchResult {
 		let disabled_count = to_disable.len() as u32;
-		self.config.oracle_count = self.config.oracle_count
+		self.config.oracle_count = self
+			.config
+			.oracle_count
 			.checked_sub(disabled_count)
 			.ok_or(Error::<T>::NotEnoughOracles)?;
 		for d in to_disable {
@@ -1269,7 +1275,7 @@ impl<T: Trait> Feed<T> {
 				timeout: self.config.timeout,
 			},
 		);
-		let started_at = frame_system::Module::<T>::block_number();
+		let started_at = frame_system::Pallet::<T>::block_number();
 		Rounds::<T>::insert(self.id, new_round_id, Round::new(started_at));
 
 		Ok(started_at)
@@ -1284,7 +1290,7 @@ impl<T: Trait> Feed<T> {
 		let mut timed_out_round = self.round(timed_out_id).ok_or(Error::<T>::RoundNotFound)?;
 		timed_out_round.answer = prev_round.answer;
 		timed_out_round.answered_in_round = prev_round.answered_in_round;
-		let updated_at = frame_system::Module::<T>::block_number();
+		let updated_at = frame_system::Pallet::<T>::block_number();
 		timed_out_round.updated_at = Some(updated_at);
 
 		Rounds::<T>::insert(self.id, timed_out_id, timed_out_round);
@@ -1300,7 +1306,7 @@ impl<T: Trait> Feed<T> {
 }
 
 // We want the feed to sync automatically when going out of scope.
-impl<T: Trait> Drop for Feed<T> {
+impl<T: Config> Drop for Feed<T> {
 	fn drop(&mut self) {
 		if self.should_sync {
 			self.sync_to_storage();
@@ -1308,7 +1314,7 @@ impl<T: Trait> Drop for Feed<T> {
 	}
 }
 
-impl<T: Trait> FeedOracle<T> for Module<T> {
+impl<T: Config> FeedOracle<T> for Module<T> {
 	type FeedId = T::FeedId;
 	type Feed = Feed<T>;
 	type MutableFeed = Feed<T>;
@@ -1326,7 +1332,7 @@ impl<T: Trait> FeedOracle<T> for Module<T> {
 	}
 }
 
-impl<T: Trait> FeedInterface<T> for Feed<T> {
+impl<T: Config> FeedInterface<T> for Feed<T> {
 	type Value = T::Value;
 
 	/// Returns the id of the first round that contains non-default data.
@@ -1349,16 +1355,16 @@ impl<T: Trait> FeedInterface<T> for Feed<T> {
 		let latest_round = self.latest_round();
 		self.data_at(latest_round).unwrap_or_else(|| {
 			debug_assert!(false, "The latest round data should always be available.");
-			frame_support::debug::error!(
+			frame_support::debug(&format!(
 				"Latest round is data missing which should never happen. (Latest round id: {:?})",
 				latest_round
-			);
+			));
 			RoundData::default()
 		})
 	}
 }
 
-impl<T: Trait> MutableFeedInterface<T> for Feed<T> {
+impl<T: Config> MutableFeedInterface<T> for Feed<T> {
 	/// Requests that a new round be started for the feed.
 	///
 	/// Returns `Ok` on success and `Err` in case the round could not be started.
