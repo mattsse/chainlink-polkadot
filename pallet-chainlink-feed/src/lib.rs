@@ -459,6 +459,7 @@ decl_module! {
 		/// Create a new oracle feed with the given config values.
 		/// Limited to feed creator accounts.
 		#[weight = T::WeightInfo::create_feed(oracles.len() as u32)]
+		#[allow(clippy::too_many_arguments)]
 		pub fn create_feed(
 			origin,
 			payment: BalanceOf<T>,
@@ -591,7 +592,7 @@ decl_module! {
 
 				let new_round_id = feed.reporting_round_id().saturating_add(One::one());
 				let next_eligible_round = oracle_status.last_started_round
-					.unwrap_or(Zero::zero())
+					.unwrap_or_else(Zero::zero)
 					.checked_add(feed.config.restart_delay).ok_or(Error::<T>::Overflow)?
 					.checked_add(One::one()).ok_or(Error::<T>::Overflow)?;
 				let eligible_to_start = round_id >= next_eligible_round
@@ -814,7 +815,7 @@ decl_module! {
 
 				let new_round = feed.reporting_round_id()
 					.checked_add(One::one()).ok_or(Error::<T>::Overflow)?;
-				let last_started = requester.last_started_round.unwrap_or(Zero::zero());
+				let last_started = requester.last_started_round.unwrap_or_else(Zero::zero);
 				let next_allowed_round = last_started
 					.checked_add(requester.delay).ok_or(Error::<T>::Overflow)?;
 				ensure!(
@@ -1108,11 +1109,11 @@ impl<T: Config> Feed<T> {
 		let started_at = self
 			.round(round)
 			.map(|r| r.started_at)
-			.unwrap_or(Zero::zero());
+			.unwrap_or_else(Zero::zero);
 		let timeout = self
 			.details(round)
 			.map(|d| d.timeout)
-			.unwrap_or(Zero::zero());
+			.unwrap_or_else(Zero::zero);
 		let block_num = frame_system::Pallet::<T>::block_number();
 
 		started_at > Zero::zero()
