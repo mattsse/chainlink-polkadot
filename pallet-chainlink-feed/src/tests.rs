@@ -1,6 +1,10 @@
 use super::*;
 use crate::{mock::*, Error};
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, sp_runtime::traits::Zero};
+use frame_support::sp_runtime::traits::{AccountIdConversion};
+use frame_support::traits::{ Currency};
+
+type Balances = pallet_balances::Pallet<Test>;
 
 #[test]
 fn feed_creation_should_work() {

@@ -1,12 +1,13 @@
-use frame_support::parameter_types;
-use frame_system as system;
+use frame_support::{pallet_prelude::DispatchResultWithPostInfo, PalletId,
+					parameter_types, sp_io, sp_runtime::traits::{AccountIdConversion}};
+use pallet_chainlink_feed::*;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
 
-use pallet_chainlink_feed::*;
+use frame_system as system;
 
 use crate as pallet_chainlink_feed;
 
@@ -197,15 +198,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(pallet_account, 100 * MIN_RESERVE)],
 	}
-	.assimilate_storage(&mut t)
-	.unwrap();
+		.assimilate_storage(&mut t)
+		.unwrap();
 
-	crate::GenesisConfig::<Test> {
-		pallet_admin: pallet_account,
+	pallet_chainlink_feed::GenesisConfig::<Test> {
+		pallet_admin: Some(pallet_account),
 		feed_creators: vec![1],
 	}
-	.assimilate_storage(&mut t)
-	.unwrap();
+		.assimilate_storage(&mut t)
+		.unwrap();
 
 	t.into()
 }
