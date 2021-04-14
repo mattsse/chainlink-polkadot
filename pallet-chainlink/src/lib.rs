@@ -18,18 +18,24 @@
 
 #[warn(unused_imports)]
 use codec::Codec;
-use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure, Parameter, dispatch::DispatchResult, pallet_prelude::*, sp_runtime::traits::Zero};
-use frame_support::traits::{Get, ReservableCurrency, Currency, BalanceStatus, UnfilteredDispatchable};
-use sp_std::prelude::*;
+use frame_support::traits::{
+	BalanceStatus, Currency, Get, ReservableCurrency, UnfilteredDispatchable,
+};
+use frame_support::{
+	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResult, ensure,
+	pallet_prelude::*, sp_runtime::traits::Zero, Parameter,
+};
 use frame_system::ensure_signed;
+use sp_std::prelude::*;
 
 #[cfg(test)]
 mod tests;
 
-
 // A trait allowing to inject Operator results back into the specified Call
 pub trait CallbackWithParameter {
-	fn with_result(&self, result: Vec<u8>) -> Option<Self> where Self: core::marker::Sized;
+	fn with_result(&self, result: Vec<u8>) -> Option<Self>
+	where
+		Self: core::marker::Sized;
 }
 
 pub trait Config: frame_system::Config {
@@ -37,14 +43,19 @@ pub trait Config: frame_system::Config {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	// A reference to an Extrinsic that can have a result injected. Used as Chainlink callback
-	type Callback: Parameter + UnfilteredDispatchable<Origin = Self::Origin> + Codec + Eq + CallbackWithParameter;
+	type Callback: Parameter
+		+ UnfilteredDispatchable<Origin = Self::Origin>
+		+ Codec
+		+ Eq
+		+ CallbackWithParameter;
 
 	// Period during which a request is valid
 	type ValidityPeriod: Get<Self::BlockNumber>;
 }
 
 // REVIEW: Use this for transferring currency.
-pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type BalanceOf<T> =
+	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 // Uniquely identify a request's specification understood by an Operator
 pub type SpecIndex = Vec<u8>;
@@ -54,7 +65,7 @@ pub type RequestIdentifier = u64;
 pub type DataVersion = u64;
 
 decl_storage! {
-    trait Store for Module<T: Config> as Chainlink {
+	trait Store for Module<T: Config> as Chainlink {
 		// A set of all registered Operator
 		// TODO migrate to 'natural' hasher once migrated to 2.0
 		pub Operators get(fn operator): map hasher(blake2_128_concat) T::AccountId => bool;
@@ -67,13 +78,26 @@ decl_storage! {
 		// REVIEW: Consider using a struct for the Requests instead of a tuple to increase
 		//         readability.
 		pub Requests get(fn request): map hasher(blake2_128_concat) RequestIdentifier => (T::AccountId, Vec<T::Callback>, T::BlockNumber, BalanceOf<T>);
-    }
+	}
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T>
+	where
+		AccountId = <T as frame_system::Config>::AccountId,
+		Balance = BalanceOf<T>,
+	{
 		// A request has been accepted. Corresponding fee payment is reserved
-		OracleRequest(AccountId, SpecIndex, RequestIdentifier, AccountId, DataVersion, Vec<u8>, Vec<u8>, Balance),
+		OracleRequest(
+			AccountId,
+			SpecIndex,
+			RequestIdentifier,
+			AccountId,
+			DataVersion,
+			Vec<u8>,
+			Vec<u8>,
+			Balance,
+		),
 
 		// A request has been answered. Corresponding fee payment is transferred
 		OracleAnswer(AccountId, RequestIdentifier, AccountId, Vec<u8>, Balance),
@@ -92,7 +116,7 @@ decl_event!(
 decl_error! {
 	// Error for the ChainLink module.
 	pub enum Error for Module<T: Config> {
-	    // Manipulating an unknown operator
+		// Manipulating an unknown operator
 		UnknownOperator,
 		// Manipulating an unknown request
 		UnknownRequest,
@@ -186,7 +210,7 @@ decl_module! {
 		// The fee reserved during `initiate_request` is transferred as soon as this callback is called.
 		// TODO check weight
 		#[weight = 10_000]
-        fn callback(origin, request_id: RequestIdentifier, result: Vec<u8>) -> DispatchResult {
+		fn callback(origin, request_id: RequestIdentifier, result: Vec<u8>) -> DispatchResult {
 			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin.clone())?;
 
 			ensure!(<Requests<T>>::contains_key(&request_id), Error::<T>::UnknownRequest);
@@ -210,7 +234,7 @@ decl_module! {
 
 			Self::deposit_event(RawEvent::OracleAnswer(operator, request_id, who, result, fee));
 
-            Ok(())
+			Ok(())
 		}
 
 		// Identify requests that are considered dead and remove them

@@ -1,7 +1,5 @@
 use codec::{Decode, Encode};
-use frame_support::{
-	parameter_types, traits::OnFinalize
-};
+use frame_support::{parameter_types, traits::OnFinalize};
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -28,7 +26,6 @@ frame_support::construct_runtime!(
 		Chainlink: pallet_chainlink::{Pallet, Call, Storage, Event<T>},
 	}
 );
-
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -96,23 +93,32 @@ parameter_types! {
 // type Chainlink = pallet_chainlink::Pallet<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
-	pallet_balances::GenesisConfig::<Test>{
+	let mut t = system::GenesisConfig::default()
+		.build_storage::<Test>()
+		.unwrap();
+	pallet_balances::GenesisConfig::<Test> {
 		// Total issuance will be 200 with treasury account initialized at ED.
 		balances: vec![(0, 100000), (1, 100000), (2, 100000)],
-	}.assimilate_storage(&mut t).unwrap();
+	}
+	.assimilate_storage(&mut t)
+	.unwrap();
 	t.into()
 }
 
 pub fn last_event() -> RawEvent<u128, u64> {
-	System::events().into_iter().map(|r| r.event)
+	System::events()
+		.into_iter()
+		.map(|r| r.event)
 		.filter_map(|e| {
-			if let Event::pallet_chainlink(inner) = e { Some(inner) } else { None }
+			if let Event::pallet_chainlink(inner) = e {
+				Some(inner)
+			} else {
+				None
+			}
 		})
 		.last()
 		.unwrap()
 }
-
 
 pub mod module2 {
 	use super::*;
@@ -148,7 +154,7 @@ pub mod module2 {
 		fn with_result(&self, result: Vec<u8>) -> Option<Self> {
 			match *self {
 				Call::callback(_) => Some(Call::callback(result)),
-				_ => None
+				_ => None,
 			}
 		}
 	}
@@ -160,35 +166,60 @@ fn operators_can_be_registered() {
 		System::set_block_number(1);
 		assert!(!<Chainlink>::operator(1));
 		assert!(<Chainlink>::register_operator(Origin::signed(1)).is_ok());
-		assert_eq!(last_event(),RawEvent::OperatorRegistered(1));
+		assert_eq!(last_event(), RawEvent::OperatorRegistered(1));
 		assert!(<Chainlink>::operator(1));
 		assert!(<Chainlink>::unregister_operator(Origin::signed(1)).is_ok());
 		assert!(!<Chainlink>::operator(1));
-		assert_eq!(last_event(),RawEvent::OperatorUnregistered(1));
+		assert_eq!(last_event(), RawEvent::OperatorUnregistered(1));
 	});
 
 	new_test_ext().execute_with(|| {
 		assert!(<Chainlink>::unregister_operator(Origin::signed(1)).is_err());
 		assert!(!<Chainlink>::operator(1));
 	});
-
 }
 
 #[test]
 fn initiate_requests() {
-
 	new_test_ext().execute_with(|| {
 		assert!(<Chainlink>::register_operator(Origin::signed(1)).is_ok());
-		assert!(<Chainlink>::initiate_request(Origin::signed(2), 1, vec![], 1, vec![], 0, module2::Call::<Test>::callback(vec![]).into()).is_err());
+		assert!(<Chainlink>::initiate_request(
+			Origin::signed(2),
+			1,
+			vec![],
+			1,
+			vec![],
+			0,
+			module2::Call::<Test>::callback(vec![]).into()
+		)
+		.is_err());
 	});
 
 	new_test_ext().execute_with(|| {
-		assert!(<Chainlink>::initiate_request(Origin::signed(2), 1, vec![], 1, vec![], 1, module2::Call::<Test>::callback(vec![]).into()).is_err());
+		assert!(<Chainlink>::initiate_request(
+			Origin::signed(2),
+			1,
+			vec![],
+			1,
+			vec![],
+			1,
+			module2::Call::<Test>::callback(vec![]).into()
+		)
+		.is_err());
 	});
 
 	new_test_ext().execute_with(|| {
 		assert!(<Chainlink>::register_operator(Origin::signed(1)).is_ok());
-		assert!(<Chainlink>::initiate_request(Origin::signed(2), 1, vec![], 1, vec![], 2, module2::Call::<Test>::callback(vec![]).into()).is_ok());
+		assert!(<Chainlink>::initiate_request(
+			Origin::signed(2),
+			1,
+			vec![],
+			1,
+			vec![],
+			2,
+			module2::Call::<Test>::callback(vec![]).into()
+		)
+		.is_ok());
 		assert!(<Chainlink>::callback(Origin::signed(3), 0, 10.encode()).is_err());
 	});
 
@@ -199,12 +230,33 @@ fn initiate_requests() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert!(<Chainlink>::register_operator(Origin::signed(1)).is_ok());
-		assert_eq!(last_event(),RawEvent::OperatorRegistered(1));
+		assert_eq!(last_event(), RawEvent::OperatorRegistered(1));
 
 		let parameters = ("a", "b");
 		let data = parameters.encode();
-		assert!(<Chainlink>::initiate_request(Origin::signed(2), 1, vec![], 1, data.clone(), 2, module2::Call::<Test>::callback(vec![]).into()).is_ok());
-		assert_eq!(last_event(),RawEvent::OracleRequest(1, vec![], 0, 2, 1, data.clone(), "Chainlink.callback".into(), 2));
+		assert!(<Chainlink>::initiate_request(
+			Origin::signed(2),
+			1,
+			vec![],
+			1,
+			data.clone(),
+			2,
+			module2::Call::<Test>::callback(vec![]).into()
+		)
+		.is_ok());
+		assert_eq!(
+			last_event(),
+			RawEvent::OracleRequest(
+				1,
+				vec![],
+				0,
+				2,
+				1,
+				data.clone(),
+				"Chainlink.callback".into(),
+				2
+			)
+		);
 
 		let r = <(Vec<u8>, Vec<u8>)>::decode(&mut &data[..]).unwrap().0;
 		assert_eq!("a", std::str::from_utf8(&r).unwrap());
@@ -213,15 +265,22 @@ fn initiate_requests() {
 		assert!(<Chainlink>::callback(Origin::signed(1), 0, result.encode()).is_ok());
 		assert_eq!(module2::Result::get(), result);
 	});
-
 }
 
 #[test]
 pub fn on_finalize() {
-
 	new_test_ext().execute_with(|| {
 		assert!(<Chainlink>::register_operator(Origin::signed(1)).is_ok());
-		assert!(<Chainlink>::initiate_request(Origin::signed(2), 1, vec![], 1, vec![], 2, module2::Call::<Test>::callback(vec![]).into()).is_ok());
+		assert!(<Chainlink>::initiate_request(
+			Origin::signed(2),
+			1,
+			vec![],
+			1,
+			vec![],
+			2,
+			module2::Call::<Test>::callback(vec![]).into()
+		)
+		.is_ok());
 		<Chainlink as OnFinalize<u64>>::on_finalize(20);
 		// Request has been killed, too old
 		assert!(<Chainlink>::callback(Origin::signed(1), 0, 10.encode()).is_err());
