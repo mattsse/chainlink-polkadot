@@ -1,99 +1,99 @@
-#![cfg(test)]
-
-use super::*;
+use codec::{Decode, Encode};
 use frame_support::{
-	impl_outer_origin, impl_outer_event, parameter_types, weights::Weight,
-	traits::{OnFinalize}
+	parameter_types, traits::OnFinalize
 };
+use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
-	Perbill,
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
-use codec::{Decode, Encode};
-use crate::sp_api_hidden_includes_decl_storage::hidden_include::StorageValue;
-use frame_system as system;
 
-impl_outer_origin! {
-	pub enum Origin for Test where system = frame_system {}
-}
+use crate as pallet_chainlink;
 
-pub mod chainlink {
-	// Re-export needed for `impl_outer_event!`.
-	pub use super::super::*;
-}
+use super::*;
 
-impl_outer_event! {
-	pub enum TestEvent for Test {
-		system<T>,
-		pallet_balances<T>,
-		chainlink<T>,
+type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
+type Block = frame_system::mocking::MockBlock<Test>;
+
+// Configure a mock runtime to test the pallet.
+frame_support::construct_runtime!(
+	pub enum Test where
+		Block = Block,
+		NodeBlock = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic,
+	{
+		System: frame_system::{Pallet, Call, Config, Storage, Event<T>},
+		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
+		Chainlink: pallet_chainlink::{Pallet, Call, Storage, Event<T>},
 	}
-}
+);
 
 
-#[derive(Clone, Eq, PartialEq)]
-pub struct Test;
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
-	pub const MaximumBlockWeight: Weight = 1024;
-	pub const MaximumBlockLength: u32 = 2 * 1024;
-	pub const AvailableBlockRatio: Perbill = Perbill::one();
+	pub const SS58Prefix: u8 = 42;
 }
-impl system::Trait for Test {
+
+pub(crate) type AccountId = u128;
+pub(crate) type BlockNumber = u64;
+
+impl system::Config for Test {
 	type BaseCallFilter = ();
+	type BlockWeights = ();
+	type BlockLength = ();
+	type DbWeight = ();
 	type Origin = Origin;
+	type Call = Call;
 	type Index = u64;
-	type BlockNumber = u64;
-	type Call = ();
+	type BlockNumber = BlockNumber;
 	type Hash = H256;
 	type Hashing = BlakeTwo256;
-	type AccountId = u128; // u64 is not enough to hold bytes used to generate bounty account
+	type AccountId = AccountId;
 	type Lookup = IdentityLookup<Self::AccountId>;
 	type Header = Header;
-	type Event = TestEvent;
+	type Event = Event;
 	type BlockHashCount = BlockHashCount;
-	type MaximumBlockWeight = MaximumBlockWeight;
-	type DbWeight = ();
-	type BlockExecutionWeight = ();
-	type ExtrinsicBaseWeight = ();
-	type MaximumExtrinsicWeight = MaximumBlockWeight;
-	type AvailableBlockRatio = AvailableBlockRatio;
-	type MaximumBlockLength = MaximumBlockLength;
 	type Version = ();
-	type PalletInfo = ();
-	type AccountData = pallet_balances::AccountData<u64>;
+	type PalletInfo = PalletInfo;
+	type AccountData = pallet_balances::AccountData<Balance>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type SystemWeightInfo = ();
+	type SS58Prefix = SS58Prefix;
+	type OnSetCode = ();
 }
+
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 }
-impl pallet_balances::Trait for Test {
+
+type Balance = u64;
+
+impl pallet_balances::Config for Test {
 	type MaxLocks = ();
-	type Balance = u64;
-	type Event = TestEvent;
+	type Balance = Balance;
+	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
 	type AccountStore = System;
 	type WeightInfo = ();
 }
-impl chainlink::Trait for Test {
-	type Event = TestEvent;
-	type Currency = pallet_balances::Module<Test>;
+
+impl pallet_chainlink::Config for Test {
+	type Event = Event;
+	type Currency = pallet_balances::Pallet<Test>;
 	type Callback = module2::Call<Test>;
 	type ValidityPeriod = ValidityPeriod;
 }
-impl module2::Trait for Test {
-}
+
+impl module2::Config for Test {}
+
 parameter_types! {
 	pub const ValidityPeriod: u64 = 10;
 }
 
-type System = frame_system::Module<Test>;
-type Chainlink = chainlink::Module<Test>;
+// type Chainlink = pallet_chainlink::Pallet<Test>;
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut t = system::GenesisConfig::default().build_storage::<Test>().unwrap();
@@ -107,7 +107,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 pub fn last_event() -> RawEvent<u128, u64> {
 	System::events().into_iter().map(|r| r.event)
 		.filter_map(|e| {
-			if let TestEvent::chainlink(inner) = e { Some(inner) } else { None }
+			if let Event::pallet_chainlink(inner) = e { Some(inner) } else { None }
 		})
 		.last()
 		.unwrap()
@@ -117,15 +117,15 @@ pub fn last_event() -> RawEvent<u128, u64> {
 pub mod module2 {
 	use super::*;
 
-	pub trait Trait: frame_system::Trait {}
+	pub trait Config: frame_system::Config {}
 
 	frame_support::decl_module! {
-		pub struct Module<T: Trait> for enum Call
-			where origin: <T as frame_system::Trait>::Origin
+		pub struct Module<T: Config> for enum Call
+			where origin: <T as frame_system::Config>::Origin
 		{
 			#[weight = 0]
 			pub fn callback(_origin, result: Vec<u8>) -> frame_support::dispatch::DispatchResult {
-				let r : u128 = u128::decode(&mut &result[..]).map_err(|err| err.what())?;
+				let r : u128 = u128::decode(&mut &result[..]).map_err(|_| Error::<T>::DecodingFailed)?;
 				<Result>::put(r);
 				Ok(())
 			}
@@ -133,12 +133,18 @@ pub mod module2 {
 	}
 
 	frame_support::decl_storage! {
-		trait Store for Module<T: Trait> as TestStorage {
+		trait Store for Module<T: Config> as TestStorage {
 			pub Result: u128;
 		}
 	}
 
-	impl <T: Trait> CallbackWithParameter for Call<T> {
+	frame_support::decl_error! {
+		pub enum Error for Module<T: Config> {
+			DecodingFailed
+		}
+	}
+
+	impl<T: Config> CallbackWithParameter for Call<T> {
 		fn with_result(&self, result: Vec<u8>) -> Option<Self> {
 			match *self {
 				Call::callback(_) => Some(Call::callback(result)),
@@ -146,7 +152,6 @@ pub mod module2 {
 			}
 		}
 	}
-
 }
 
 #[test]
@@ -221,6 +226,4 @@ pub fn on_finalize() {
 		// Request has been killed, too old
 		assert!(<Chainlink>::callback(Origin::signed(1), 0, 10.encode()).is_err());
 	});
-
 }
-
