@@ -23,12 +23,12 @@ use frame_support::{
 	pallet_prelude::*,
 	weights::Weight,
 	Parameter, RuntimeDebug,
+	PalletId
 };
 use frame_system::ensure_signed;
 use sp_arithmetic::traits::BaseArithmetic;
 use sp_runtime::{
 	traits::{AccountIdConversion, CheckedAdd, CheckedSub, Member, One, Saturating, Zero},
-	ModuleId,
 };
 use sp_std::convert::{TryFrom, TryInto};
 
@@ -52,7 +52,7 @@ pub trait Config: frame_system::Config {
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	/// The module id used to determine the account for storing the funds used to pay the oracles.
-	type ModuleId: Get<ModuleId>;
+	type PalletId: Get<PalletId>;
 
 	/// The minimum amount of funds that need to be present in the fund account.
 	type MinimumReserve: Get<BalanceOf<Self>>;
@@ -452,7 +452,7 @@ decl_module! {
 		fn deposit_event() = default;
 
 		/// The account used to pay oracles and manage the funds of this pallet.
-		const FundAccount: T::AccountId = T::ModuleId::get().into_account();
+		const FundAccount: T::AccountId = T::PalletId::get().into_account();
 
 		// --- feed operations ---
 
@@ -646,7 +646,7 @@ decl_module! {
 
 				// update oracle rewards and try to reserve them
 				let payment = details.payment;
-				T::Currency::reserve(&T::ModuleId::get().into_account(), payment)
+				T::Currency::reserve(&T::PalletId::get().into_account(), payment)
 					.or_else(|_| -> DispatchResult {
 						// track the debt in case we cannot reserve
 						Debt::<T>::try_mutate(|debt| {
@@ -849,7 +849,7 @@ decl_module! {
 			oracle_meta.withdrawable = oracle_meta.withdrawable
 				.checked_sub(&amount).ok_or(Error::<T>::InsufficientFunds)?;
 
-			T::Currency::transfer(&T::ModuleId::get().into_account(), &recipient, amount, ExistenceRequirement::KeepAlive)?;
+			T::Currency::transfer(&T::PalletId::get().into_account(), &recipient, amount, ExistenceRequirement::KeepAlive)?;
 			Oracles::<T>::insert(&oracle, oracle_meta);
 		}
 
@@ -909,7 +909,7 @@ decl_module! {
 		) {
 			let sender = ensure_signed(origin)?;
 			ensure!(sender == Self::pallet_admin(), Error::<T>::NotPalletAdmin);
-			let fund = T::ModuleId::get().into_account();
+			let fund = T::PalletId::get().into_account();
 			let reserve = T::Currency::free_balance(&fund);
 			let new_reserve = reserve.checked_sub(&amount).ok_or(Error::<T>::InsufficientFunds)?;
 			ensure!(new_reserve >= T::MinimumReserve::get(), Error::<T>::InsufficientReserve);
@@ -924,7 +924,7 @@ decl_module! {
 			let _sender = ensure_signed(origin)?;
 			Debt::<T>::try_mutate(|debt| {
 				let to_reserve = amount.min(*debt);
-				T::Currency::reserve(&T::ModuleId::get().into_account(), to_reserve)?;
+				T::Currency::reserve(&T::PalletId::get().into_account(), to_reserve)?;
 				// it's fine if we saturate to 0 debt
 				*debt = debt.saturating_sub(amount);
 				Ok(())

@@ -875,7 +875,7 @@ fn payment_withdrawal_should_work() {
 			ChainlinkFeed::withdraw_payment(Origin::signed(admin), oracle, recipient, 2 * amount),
 			Error::<Test>::InsufficientFunds
 		);
-		let fund = FeedModuleId::get().into_account();
+		let fund = FeedPalletId::get().into_account();
 		let fund_balance = Balances::free_balance(&fund);
 		Balances::make_free_balance_be(&fund, ExistentialDeposit::get());
 		assert!(
@@ -898,7 +898,7 @@ fn funds_withdrawal_should_work() {
 	new_test_ext().execute_with(|| {
 		let amount = 50;
 		let recipient = 5;
-		let fund = FeedModuleId::get().into_account();
+		let fund = FeedPalletId::get().into_account();
 		assert_noop!(
 			ChainlinkFeed::withdraw_funds(Origin::signed(123), recipient, amount),
 			Error::<Test>::NotPalletAdmin
@@ -923,7 +923,7 @@ fn funds_withdrawal_should_work() {
 fn transfer_pallet_admin_should_work() {
 	new_test_ext().execute_with(|| {
 		let new_admin = 23;
-		let fund = FeedModuleId::get().into_account();
+		let fund = FeedPalletId::get().into_account();
 		assert_noop!(
 			ChainlinkFeed::transfer_pallet_admin(Origin::signed(123), new_admin),
 			Error::<Test>::NotPalletAdmin
@@ -1061,7 +1061,7 @@ fn prune_should_work() {
 #[test]
 fn feed_creation_permissioning() {
 	new_test_ext().execute_with(|| {
-		let admin = FeedModuleId::get().into_account();
+		let admin = FeedPalletId::get().into_account();
 		let new_creator = 15;
 		assert_noop!(
 			FeedBuilder::new().owner(new_creator).build_and_store(),
@@ -1094,7 +1094,7 @@ fn feed_creation_permissioning() {
 #[test]
 fn can_go_into_debt_and_repay() {
 	new_test_ext().execute_with(|| {
-		let admin: AccountId = FeedModuleId::get().into_account();
+		let admin: AccountId = FeedPalletId::get().into_account();
 		let owner = 1;
 		let oracle = 2;
 		let payment = 33;

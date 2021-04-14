@@ -79,7 +79,7 @@ impl pallet_balances::Config for Test {
 pub(crate) const MIN_RESERVE: u64 = 100;
 
 parameter_types! {
-	pub const FeedModuleId: ModuleId = ModuleId(*b"linkfeed");
+	pub const FeedPalletId: PalletId = PalletId(*b"linkfeed");
 	pub const MinimumReserve: u64 = MIN_RESERVE;
 	pub const StringLimit: u32 = 15;
 	pub const OracleLimit: u32 = 10;
@@ -95,7 +95,7 @@ impl pallet_chainlink_feed::Config for Test {
 	type FeedId = FeedId;
 	type Value = Value;
 	type Currency = Balances;
-	type ModuleId = FeedModuleId;
+	type PalletId = FeedPalletId;
 	type MinimumReserve = MinimumReserve;
 	type StringLimit = StringLimit;
 	type OracleCountLimit = OracleLimit;
@@ -193,15 +193,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		.build_storage::<Test>()
 		.unwrap();
 
-	let module_account: AccountId = FeedModuleId::get().into_account();
+	let pallet_account: AccountId = FeedPalletId::get().into_account();
 	pallet_balances::GenesisConfig::<Test> {
-		balances: vec![(module_account, 100 * MIN_RESERVE)],
+		balances: vec![(pallet_account, 100 * MIN_RESERVE)],
 	}
 	.assimilate_storage(&mut t)
 	.unwrap();
 
 	crate::GenesisConfig::<Test> {
-		pallet_admin: module_account,
+		pallet_admin: pallet_account,
 		feed_creators: vec![1],
 	}
 	.assimilate_storage(&mut t)
