@@ -18,11 +18,12 @@
 
 #[warn(unused_imports)]
 use codec::Codec;
-use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure, Parameter, dispatch::DispatchResult};
+use frame_support::{decl_error, decl_event, decl_module, decl_storage, ensure, Parameter, dispatch::DispatchResult, pallet_prelude::*, sp_runtime::traits::Zero};
 use frame_support::traits::{Get, ReservableCurrency, Currency, BalanceStatus, UnfilteredDispatchable};
 use sp_std::prelude::*;
 use frame_system::ensure_signed;
 
+#[cfg(test)]
 mod tests;
 
 
@@ -31,8 +32,8 @@ pub trait CallbackWithParameter {
 	fn with_result(&self, result: Vec<u8>) -> Option<Self> where Self: core::marker::Sized;
 }
 
-pub trait Trait: frame_system::Trait {
-	type Event: From<Event<Self>> + Into<<Self as frame_system::Trait>::Event>;
+pub trait Config: frame_system::Config {
+	type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
 	type Currency: ReservableCurrency<Self::AccountId>;
 
 	// A reference to an Extrinsic that can have a result injected. Used as Chainlink callback
@@ -43,7 +44,7 @@ pub trait Trait: frame_system::Trait {
 }
 
 // REVIEW: Use this for transferring currency.
-pub type BalanceOf<T> = <<T as Trait>::Currency as Currency<<T as frame_system::Trait>::AccountId>>::Balance;
+pub type BalanceOf<T> = <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 // Uniquely identify a request's specification understood by an Operator
 pub type SpecIndex = Vec<u8>;
@@ -53,7 +54,7 @@ pub type RequestIdentifier = u64;
 pub type DataVersion = u64;
 
 decl_storage! {
-    trait Store for Module<T: Trait> as Chainlink {
+    trait Store for Module<T: Config> as Chainlink {
 		// A set of all registered Operator
 		// TODO migrate to 'natural' hasher once migrated to 2.0
 		pub Operators get(fn operator): map hasher(blake2_128_concat) T::AccountId => bool;
@@ -70,7 +71,7 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event<T> where AccountId = <T as frame_system::Trait>::AccountId, Balance = BalanceOf<T> {
+	pub enum Event<T> where AccountId = <T as frame_system::Config>::AccountId, Balance = BalanceOf<T> {
 		// A request has been accepted. Corresponding fee payment is reserved
 		OracleRequest(AccountId, SpecIndex, RequestIdentifier, AccountId, DataVersion, Vec<u8>, Vec<u8>, Balance),
 
@@ -90,7 +91,7 @@ decl_event!(
 
 decl_error! {
 	// Error for the ChainLink module.
-	pub enum Error for Module<T: Trait> {
+	pub enum Error for Module<T: Config> {
 	    // Manipulating an unknown operator
 		UnknownOperator,
 		// Manipulating an unknown request
@@ -107,7 +108,7 @@ decl_error! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+	pub struct Module<T: Config> for enum Call where origin: T::Origin {
 
 		fn deposit_event() = default;
 
@@ -116,7 +117,7 @@ decl_module! {
 		// Fails with `OperatorAlreadyRegistered` if this Operator (identified by `origin`) has already been registered.
 		#[weight = 10_000]
 		pub fn register_operator(origin) -> DispatchResult {
-			let who : <T as frame_system::Trait>::AccountId = ensure_signed(origin)?;
+			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin)?;
 
 			ensure!(!<Operators<T>>::get(&who), Error::<T>::OperatorAlreadyRegistered);
 
@@ -131,7 +132,7 @@ decl_module! {
 		// TODO check weight
 		#[weight = 10_000]
 		pub fn unregister_operator(origin) -> DispatchResult {
-			let who : <T as frame_system::Trait>::AccountId = ensure_signed(origin)?;
+			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin)?;
 
 			if Operators::<T>::take(who.clone()) {
 				Self::deposit_event(RawEvent::OperatorUnregistered(who));
@@ -150,12 +151,12 @@ decl_module! {
 		// REVIEW: Use a `BalanceOf` type for the fee instead of `u32` as shown here: https://substrate.dev/recipes/3-entrees/currency.html
 		// TODO check weight
 		#[weight = 10_000]
-		pub fn initiate_request(origin, operator: T::AccountId, spec_index: SpecIndex, data_version: DataVersion, data: Vec<u8>, fee: BalanceOf<T>, callback: <T as Trait>::Callback) -> DispatchResult {
-			let who : <T as frame_system::Trait>::AccountId = ensure_signed(origin.clone())?;
+		pub fn initiate_request(origin, operator: T::AccountId, spec_index: SpecIndex, data_version: DataVersion, data: Vec<u8>, fee: BalanceOf<T>, callback: <T as Config>::Callback) -> DispatchResult {
+			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin.clone())?;
 
 			ensure!(<Operators<T>>::get(&operator), Error::<T>::UnknownOperator);
 			// REVIEW: Should probably be at least `ExistentialDeposit`
-			ensure!(fee > BalanceOf::<T>::from(0), Error::<T>::InsufficientFee);
+			ensure!(fee > BalanceOf::<T>::zero(), Error::<T>::InsufficientFee);
 
 			T::Currency::reserve(&who, fee.into())?;
 
@@ -168,7 +169,7 @@ decl_module! {
 			NextRequestIdentifier::put(request_id + 1);
 
 			// REVIEW: Is it intentional that requests are only valid during the current block?
-			let now = frame_system::Module::<T>::block_number();
+			let now = frame_system::Pallet::<T>::block_number();
 			// REVIEW: You might want to think about and document that your requests can be overwritten
 			//         as soon as the request id wraps around.
 			// REVIEW: Is the `Vec` intended for forward compatibility? It seems superfluous here.
@@ -186,7 +187,7 @@ decl_module! {
 		// TODO check weight
 		#[weight = 10_000]
         fn callback(origin, request_id: RequestIdentifier, result: Vec<u8>) -> DispatchResult {
-			let who : <T as frame_system::Trait>::AccountId = ensure_signed(origin.clone())?;
+			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin.clone())?;
 
 			ensure!(<Requests<T>>::contains_key(&request_id), Error::<T>::UnknownRequest);
 			let (operator, callback, _, fee) = <Requests<T>>::get(&request_id);
