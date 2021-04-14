@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "pallet-chainlink",
+    "pallet-chainlink-feed",
+    "substrate-chainlink",
+    "substrate-node-example"
+]
