@@ -1356,10 +1356,6 @@ impl<T: Config> FeedInterface<T> for Feed<T> {
 		let latest_round = self.latest_round();
 		self.data_at(latest_round).unwrap_or_else(|| {
 			debug_assert!(false, "The latest round data should always be available.");
-			frame_support::debug(&format!(
-				"Latest round is data missing which should never happen. (Latest round id: {:?})",
-				latest_round
-			));
 			RoundData::default()
 		})
 	}
