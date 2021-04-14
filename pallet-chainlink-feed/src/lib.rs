@@ -50,19 +50,19 @@ pub mod pallet {
 		BlockNumber: Parameter,
 		Value: Parameter,
 	> {
-		owner: AccountId,
-		pending_owner: Option<AccountId>,
-		submission_value_bounds: (Value, Value),
-		submission_count_bounds: (u32, u32),
-		payment: Balance,
-		timeout: BlockNumber,
-		decimals: u8,
-		description: Vec<u8>,
-		restart_delay: RoundId,
-		reporting_round: RoundId,
-		latest_round: RoundId,
-		first_valid_round: Option<RoundId>,
-		oracle_count: u32,
+		pub owner: AccountId,
+		pub pending_owner: Option<AccountId>,
+		pub submission_value_bounds: (Value, Value),
+		pub submission_count_bounds: (u32, u32),
+		pub payment: Balance,
+		pub timeout: BlockNumber,
+		pub decimals: u8,
+		pub description: Vec<u8>,
+		pub restart_delay: RoundId,
+		pub reporting_round: RoundId,
+		pub latest_round: RoundId,
+		pub first_valid_round: Option<RoundId>,
+		pub oracle_count: u32,
 	}
 
 	pub type FeedConfigOf<T> = FeedConfig<
@@ -77,10 +77,10 @@ pub mod pallet {
 	/// been provided.
 	#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
 	pub struct Round<BlockNumber, Value> {
-		started_at: BlockNumber,
-		answer: Option<Value>,
-		updated_at: Option<BlockNumber>,
-		answered_in_round: Option<RoundId>,
+		pub started_at: BlockNumber,
+		pub answer: Option<Value>,
+		pub updated_at: Option<BlockNumber>,
+		pub answered_in_round: Option<RoundId>,
 	}
 
 	pub type RoundOf<T> = Round<<T as frame_system::Config>::BlockNumber, <T as Config>::Value>;
@@ -102,10 +102,10 @@ pub mod pallet {
 	/// Round data relevant to oracles.
 	#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
 	pub struct RoundDetails<Balance, BlockNumber, Value> {
-		submissions: Vec<Value>,
-		submission_count_bounds: (u32, u32),
-		payment: Balance,
-		timeout: BlockNumber,
+		pub submissions: Vec<Value>,
+		pub submission_count_bounds: (u32, u32),
+		pub payment: Balance,
+		pub timeout: BlockNumber,
 	}
 
 	pub type RoundDetailsOf<T> =
@@ -114,9 +114,9 @@ pub mod pallet {
 	/// Meta data tracking withdrawable rewards and admin for an oracle.
 	#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
 	pub struct OracleMeta<AccountId, Balance> {
-		withdrawable: Balance,
-		admin: AccountId,
-		pending_admin: Option<AccountId>,
+		pub withdrawable: Balance,
+		pub admin: AccountId,
+		pub pending_admin: Option<AccountId>,
 	}
 
 	pub type OracleMetaOf<T> = OracleMeta<<T as frame_system::Config>::AccountId, BalanceOf<T>>;
@@ -124,11 +124,11 @@ pub mod pallet {
 	/// Meta data tracking the oracle status for a feed.
 	#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
 	pub struct OracleStatus<Value> {
-		starting_round: RoundId,
-		ending_round: Option<RoundId>,
-		last_reported_round: Option<RoundId>,
-		last_started_round: Option<RoundId>,
-		latest_submission: Option<Value>,
+		pub starting_round: RoundId,
+		pub ending_round: Option<RoundId>,
+		pub last_reported_round: Option<RoundId>,
+		pub last_started_round: Option<RoundId>,
+		pub latest_submission: Option<Value>,
 	}
 
 	/// Minimum and Maximum number of submissions allowed per round.
@@ -152,8 +152,8 @@ pub mod pallet {
 	/// Used to store round requester permissions for accounts.
 	#[derive(Clone, Encode, Decode, Default, Eq, PartialEq, RuntimeDebug)]
 	pub struct Requester {
-		delay: RoundId,
-		last_started_round: Option<RoundId>,
+		pub delay: RoundId,
+		pub last_started_round: Option<RoundId>,
 	}
 
 	/// Round data as served by the `FeedInterface`.
@@ -1011,25 +1011,52 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
+		pub pallet_admin: Option<T::AccountId>,
 		// accounts configured at genesis to be allowed to create new feeds
-		feed_creators: Vec<T::AccountId>,
+		pub feed_creators: Vec<T::AccountId>,
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
+				pallet_admin: Default::default(),
 				feed_creators: Default::default(),
 			}
 		}
 	}
 
+
+
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			if let Some(ref admin) = self.pallet_admin {
+				PalletAdmin::<T>::put(admin);
+			}
 			for creator in &self.feed_creators {
 				FeedCreators::<T>::insert(creator, ());
 			}
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> GenesisConfig<T> {
+		/// Direct implementation of `GenesisBuild::build_storage`.
+		///
+		/// Kept in order not to break dependency.
+		pub fn build_storage(&self) -> Result<frame_support::sp_runtime::Storage, String> {
+			<Self as GenesisBuild<T>>::build_storage(self)
+		}
+
+		/// Direct implementation of `GenesisBuild::assimilate_storage`.
+		///
+		/// Kept in order not to break dependency.
+		pub fn assimilate_storage(
+			&self,
+			storage: &mut frame_support::sp_runtime::Storage,
+		) -> Result<(), String> {
+			<Self as GenesisBuild<T>>::assimilate_storage(self, storage)
 		}
 	}
 
@@ -1037,9 +1064,9 @@ pub mod pallet {
 	/// `should_sync` flag determines whether the `config` is put into
 	/// storage on `drop`.
 	pub struct Feed<T: Config> {
-		id: T::FeedId,
-		config: FeedConfigOf<T>,
-		should_sync: bool,
+		pub id: T::FeedId,
+		pub config: FeedConfigOf<T>,
+		pub should_sync: bool,
 	}
 
 	impl<T: Config> Feed<T> {
@@ -1047,7 +1074,7 @@ pub mod pallet {
 
 		/// Create a new feed with the given id and config.
 		/// Will store the config when dropped.
-		fn new(id: T::FeedId, config: FeedConfigOf<T>) -> Self {
+		pub fn new(id: T::FeedId, config: FeedConfigOf<T>) -> Self {
 			Self {
 				id,
 				config,
@@ -1058,7 +1085,7 @@ pub mod pallet {
 		/// Load the feed with the given id for reading.
 		/// Will not store the config when dropped.
 		/// -> Don't mutate the feed object.
-		fn read_only_from(id: T::FeedId) -> Option<Self> {
+		pub fn read_only_from(id: T::FeedId) -> Option<Self> {
 			let config = Feeds::<T>::get(id)?;
 			Some(Self {
 				id,
@@ -1069,7 +1096,7 @@ pub mod pallet {
 
 		/// Load the feed with the given id from storage.
 		/// Will store the config when dropped.
-		fn load_from(id: T::FeedId) -> Option<Self> {
+		pub fn load_from(id: T::FeedId) -> Option<Self> {
 			let config = Feeds::<T>::get(id)?;
 			Some(Self {
 				id,
@@ -1081,7 +1108,7 @@ pub mod pallet {
 		// --- getters ---
 
 		/// Return the round oracles are currently reporting data for.
-		fn reporting_round_id(&self) -> RoundId {
+		pub fn reporting_round_id(&self) -> RoundId {
 			self.config.reporting_round
 		}
 
@@ -1184,7 +1211,7 @@ pub mod pallet {
 		/// **Warning:** Fallible function that changes storage.
 		// TODO: use [require_transactional](https://github.com/paritytech/substrate/issues/7004)
 		// after migrating to Substrate v3 for this and others.
-		fn add_oracles(&mut self, to_add: Vec<(T::AccountId, T::AccountId)>) -> DispatchResult {
+		pub fn add_oracles(&mut self, to_add: Vec<(T::AccountId, T::AccountId)>) -> DispatchResult {
 			let new_count = self
 				.oracle_count()
 				// saturating is fine because we enforce a limit below
@@ -1259,7 +1286,7 @@ pub mod pallet {
 		/// (Past and present rounds are unaffected.)
 		///
 		/// **Warning:** Fallible function that changes storage.
-		fn update_future_rounds(
+		pub fn update_future_rounds(
 			&mut self,
 			payment: BalanceOf<T>,
 			submission_count_bounds: (u32, u32),
