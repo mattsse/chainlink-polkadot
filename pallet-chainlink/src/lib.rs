@@ -176,13 +176,13 @@ decl_module! {
 		// TODO check weight
 		#[weight = 10_000]
 		pub fn initiate_request(origin, operator: T::AccountId, spec_index: SpecIndex, data_version: DataVersion, data: Vec<u8>, fee: BalanceOf<T>, callback: <T as Config>::Callback) -> DispatchResult {
-			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin.clone())?;
+			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin)?;
 
 			ensure!(<Operators<T>>::get(&operator), Error::<T>::UnknownOperator);
 			// REVIEW: Should probably be at least `ExistentialDeposit`
 			ensure!(fee > BalanceOf::<T>::zero(), Error::<T>::InsufficientFee);
 
-			T::Currency::reserve(&who, fee.into())?;
+			T::Currency::reserve(&who, fee)?;
 
 			let request_id = NextRequestIdentifier::get();
 			// REVIEW: This can overflow. You can make a maximum of `u64::max_value()` requests.
@@ -197,7 +197,7 @@ decl_module! {
 			// REVIEW: You might want to think about and document that your requests can be overwritten
 			//         as soon as the request id wraps around.
 			// REVIEW: Is the `Vec` intended for forward compatibility? It seems superfluous here.
-			Requests::<T>::insert(request_id.clone(), (operator.clone(), vec![callback], now, fee));
+			Requests::<T>::insert(request_id, (operator.clone(), vec![callback], now, fee));
 
 			Self::deposit_event(RawEvent::OracleRequest(operator, spec_index, request_id, who, data_version, data, "Chainlink.callback".into(), fee));
 
@@ -211,7 +211,7 @@ decl_module! {
 		// TODO check weight
 		#[weight = 10_000]
 		fn callback(origin, request_id: RequestIdentifier, result: Vec<u8>) -> DispatchResult {
-			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin.clone())?;
+			let who : <T as frame_system::Config>::AccountId = ensure_signed(origin)?;
 
 			ensure!(<Requests<T>>::contains_key(&request_id), Error::<T>::UnknownRequest);
 			let (operator, callback, _, fee) = <Requests<T>>::get(&request_id);
@@ -225,7 +225,7 @@ decl_module! {
 			// REVIEW: This happens *after* the request is `take`n from storage. Is that intended?
 			//         See ["verify first, write last"](https://substrate.dev/recipes/2-appetizers/1-hello-substrate.html#inside-a-dispatchable-call) motto.
 			// TODO check whether to use BalanceStatus::Reserved or Free?
-			T::Currency::repatriate_reserved(&who, &operator, fee.into(), BalanceStatus::Free)?;
+			T::Currency::repatriate_reserved(&who, &operator, fee, BalanceStatus::Free)?;
 
 			// Dispatch the result to the original callback registered by the caller
 			// TODO fix the "?" - not sure how to proceed there
