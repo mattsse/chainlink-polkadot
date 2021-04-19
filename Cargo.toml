@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "pallet-chainlink",
+    "pallet-chainlink-feed"
+]

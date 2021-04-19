@@ -230,6 +230,9 @@ pub mod pallet {
 		/// been a valid round, yet.
 		/// Check `first_valid_round` to determine whether there is useful data, yet.
 		fn latest_data(&self) -> RoundData<T::BlockNumber, Self::Value>;
+
+		/// Represents the number of decimals with which the feed is configured
+		fn decimals(&self) -> u8;
 	}
 
 	/// Trait for read-write access to a feed.
@@ -1428,6 +1431,11 @@ pub mod pallet {
 				RoundData::default()
 			})
 		}
+		
+		/// Returns the configured decimals 
+		fn decimals(&self) -> u8 {
+			self.config.decimals
+    	}
 	}
 
 	impl<T: Config> MutableFeedInterface<T> for Feed<T> {
