@@ -34,6 +34,7 @@ pub mod pallet {
 		traits::{AccountIdConversion, CheckedAdd, CheckedSub, Member, One, Saturating, Zero},
 	};
 	use sp_std::convert::{TryFrom, TryInto};
+	use sp_std::prelude::*;
 
 	use crate::utils::{median, with_transaction_result};
 
