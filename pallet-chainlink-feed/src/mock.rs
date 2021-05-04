@@ -1,5 +1,7 @@
-use frame_support::{pallet_prelude::DispatchResultWithPostInfo, PalletId,
-					parameter_types, sp_io, sp_runtime::traits::{AccountIdConversion}};
+use frame_support::{
+	pallet_prelude::DispatchResultWithPostInfo, parameter_types, sp_io,
+	sp_runtime::traits::AccountIdConversion, PalletId,
+};
 use pallet_chainlink_feed::*;
 use sp_core::H256;
 use sp_runtime::{
@@ -198,15 +200,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	pallet_balances::GenesisConfig::<Test> {
 		balances: vec![(pallet_account, 100 * MIN_RESERVE)],
 	}
-		.assimilate_storage(&mut t)
-		.unwrap();
+	.assimilate_storage(&mut t)
+	.unwrap();
 
 	pallet_chainlink_feed::GenesisConfig::<Test> {
 		pallet_admin: Some(pallet_account),
 		feed_creators: vec![1],
 	}
-		.assimilate_storage(&mut t)
-		.unwrap();
+	.assimilate_storage(&mut t)
+	.unwrap();
 
 	t.into()
 }
